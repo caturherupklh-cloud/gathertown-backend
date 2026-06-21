@@ -18,11 +18,17 @@ const io = new Server(server, {
 const players = {}; // Menyimpan data posisi 5 pemain
 
 io.on('connection', (socket) => {
-  console.log('Pemain terhubung:', socket.id);
+    // ... log connection ...
 
-  // Beri posisi awal (X, Y) acak untuk pemain baru
-  players[socket.id] = { x: 100, y: 100, id: socket.id };
-
+    // Update data default pemain: tambahkan arah (direction)
+    players[socket.id] = { 
+        x: 100, 
+        y: 100, 
+        id: socket.id, 
+        direction: 'down', // Default hadap bawah
+        isMoving: false // Default diam
+    };
+  
   // Kirim semua posisi pemain saat ini ke pemain yang baru masuk
   socket.emit('currentPlayers', players);
   // Beritahu pemain lain ada pemain baru
