@@ -17,41 +17,38 @@ const io = new Server(server, {
 const players = {}; 
 
 io.on('connection', (socket) => {
-  console.log('Pemain terhubung:', socket.id);
+  console.log('Pemain terhubung, menunggu pilihan karakter:', socket.id);
 
-  // PEMBARUAN: Beri nilai awal untuk arah (direction) dan status gerak (isMoving)
-  players[socket.id] = { 
-      x: 100, 
-      y: 100, 
-      id: socket.id,
-      direction: 'down',
-      isMoving: false
-  };
-  
-  socket.emit('currentPlayers', players);
-  socket.broadcast.emit('newPlayer', players[socket.id]);
-
-  socket.on('setPlayerName', (name) => {
-    if (players[socket.id]) {
-      players[socket.id].playerName = name;
-      io.emit('playerMoved', players[socket.id]); // Siarkan perubahan ke semua orang
-    }
+  // BARU: Server mendengarkan pendaftaran (joinGame) dari layar pemilihan
+  socket.on('joinGame', (avatarType) => {
+      players[socket.id] = { 
+          x: 100, 
+          y: 100, 
+          id: socket.id,
+          direction: 'down',
+          isMoving: false,
+          avatar: avatarType // Menyimpan pilihan: 'boy' atau 'girl'
+      };
+      
+      socket.emit('currentPlayers', players);
+      socket.broadcast.emit('newPlayer', players[socket.id]);
   });
-  
-  // PEMBARUAN: Server sekarang menerima, menyimpan, dan menyiarkan arah hadap!
-  socket.on('playerMovement', (movementData) => {
-    players[socket.id].x = movementData.x;
-    players[socket.id].y = movementData.y;
-    players[socket.id].direction = movementData.direction; 
-    players[socket.id].isMoving = movementData.isMoving; 
 
-    socket.broadcast.emit('playerMoved', players[socket.id]);
+  socket.on('playerMovement', (movementData) => {
+      // ... (biarkan isi movement tetap sama persis seperti sebelumnya)
+      players[socket.id].x = movementData.x;
+      players[socket.id].y = movementData.y;
+      players[socket.id].direction = movementData.direction; 
+      players[socket.id].isMoving = movementData.isMoving; 
+
+      socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
   socket.on('disconnect', () => {
-    console.log('Pemain keluar:', socket.id);
-    delete players[socket.id];
-    io.emit('playerDisconnected', socket.id);
+      // ... (biarkan isi disconnect tetap sama persis)
+      console.log('Pemain keluar:', socket.id);
+      delete players[socket.id];
+      io.emit('playerDisconnected', socket.id);
   });
 });
 
