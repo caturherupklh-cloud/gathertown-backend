@@ -31,6 +31,13 @@ io.on('connection', (socket) => {
   socket.emit('currentPlayers', players);
   socket.broadcast.emit('newPlayer', players[socket.id]);
 
+  socket.on('setPlayerName', (name) => {
+    if (players[socket.id]) {
+      players[socket.id].playerName = name;
+      io.emit('playerMoved', players[socket.id]); // Siarkan perubahan ke semua orang
+    }
+  });
+  
   // PEMBARUAN: Server sekarang menerima, menyimpan, dan menyiarkan arah hadap!
   socket.on('playerMovement', (movementData) => {
     players[socket.id].x = movementData.x;
