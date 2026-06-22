@@ -49,6 +49,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('sendMessage', (text) => {
+    // Pastikan pengirim sudah terdaftar
+    if (players[socket.id]) {
+        const senderName = players[socket.id].playerName;
+        
+        // Siarkan pesan ke SEMUA orang (termasuk yang mengirim)
+        io.emit('receiveMessage', { 
+            name: senderName, 
+            text: text 
+        });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
     if (players[socket.id]) {
