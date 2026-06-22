@@ -168,8 +168,48 @@ io.on('connection', (socket) => {
             return; // Hentikan fungsi di sini
         }
 
+// ==========================================
+        // KODE RAHASIA ADMIN: MINTA NYALAKAN MIC
         // ==========================================
-        // JIKA BUKAN PERINTAH KICK, KIRIM SEBAGAI CHAT BIASA
+        if (text.startsWith('/askmic ')) {
+            const targetName = text.replace('/askmic ', '').trim().toLowerCase();
+            let targetSocketId = null;
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id; break;
+                }
+            }
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('requestMic');
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Permintaan menyalakan Mic telah dikirim ke layar ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return;
+        }
+
+        // ==========================================
+        // KODE RAHASIA ADMIN: MINTA NYALAKAN KAMERA
+        // ==========================================
+        if (text.startsWith('/askcam ')) {
+            const targetName = text.replace('/askcam ', '').trim().toLowerCase();
+            let targetSocketId = null;
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id; break;
+                }
+            }
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('requestCam');
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Permintaan menyalakan Kamera telah dikirim ke layar ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return;
+        }
+      
+        // ==========================================
+        // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
         io.emit('receiveMessage', { 
             name: senderName, 
