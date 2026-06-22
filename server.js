@@ -19,15 +19,12 @@ const players = {};
 io.on('connection', (socket) => {
   console.log('Koneksi baru masuk (belum login):', socket.id);
 
-  // KODE BARU: Server menunggu event 'joinGame' dari frontend (membawa paket nama dan avatar)
-  socket.on('joinGame', (data) => {
-    // Bebas ganti PIN ini sesuai keinginanmu!
+  // --- KODE PENJAGA GERBANG (SECURITY) ---
   const PIN_RAHASIA = "15072023"; 
 
   // Server menunggu event 'joinGame' dari frontend
   socket.on('joinGame', (data) => {
       
-    // --- KODE BARU: PENJAGA GERBANG (SECURITY) ---
     if (data.pin !== PIN_RAHASIA) {
         // Jika PIN salah, tendang dan kirim pesan error!
         socket.emit('loginFailed', "❌ Akses Ditolak: PIN Rahasia Salah!");
@@ -81,7 +78,7 @@ io.on('connection', (socket) => {
     }
   });
 
-socket.on('sendEmote', (emoji) => {
+  socket.on('sendEmote', (emoji) => {
     // Pastikan pengirim terdaftar
     if (players[socket.id]) {
         socket.broadcast.emit('receiveEmote', { 
@@ -90,7 +87,7 @@ socket.on('sendEmote', (emoji) => {
         });
     }
   });
-  
+
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
     if (players[socket.id]) {
@@ -98,9 +95,8 @@ socket.on('sendEmote', (emoji) => {
         io.emit('playerDisconnected', socket.id);
     }
   });
-});
 
-
+}); // <-- Kurung penutup utama yang sebelumnya hilang atau bergeser
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
