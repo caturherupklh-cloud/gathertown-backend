@@ -21,7 +21,21 @@ io.on('connection', (socket) => {
 
   // KODE BARU: Server menunggu event 'joinGame' dari frontend (membawa paket nama dan avatar)
   socket.on('joinGame', (data) => {
-    // Daftarkan pemain BARU SAJA SETELAH mereka menekan tombol masuk
+    // Bebas ganti PIN ini sesuai keinginanmu!
+  const PIN_RAHASIA = "15072023"; 
+
+  // Server menunggu event 'joinGame' dari frontend
+  socket.on('joinGame', (data) => {
+      
+    // --- KODE BARU: PENJAGA GERBANG (SECURITY) ---
+    if (data.pin !== PIN_RAHASIA) {
+        // Jika PIN salah, tendang dan kirim pesan error!
+        socket.emit('loginFailed', "❌ Akses Ditolak: PIN Rahasia Salah!");
+        console.log(`Penyusup ditolak: ${socket.id}`);
+        return; // Hentikan proses di sini
+    }
+
+    // Jika PIN benar, jalankan pendaftaran seperti biasa
     players[socket.id] = { 
         x: 100, 
         y: 100, 
@@ -29,10 +43,12 @@ io.on('connection', (socket) => {
         direction: 'down',
         isMoving: false,
         isBroadcasting: false,
-        avatar: data.avatar,    // Menyimpan avatar ('boy' atau 'girl')
-        playerName: data.name,   // Menyimpan nama ketikan pemain
-        agoraUid: data.agoraUid
+        avatar: data.avatar,    
+        playerName: data.name   
     };
+    
+    // Beri tahu komputer pemain bahwa dia BERHASIL MASUK
+    socket.emit('loginSuccess'); 
     
     socket.emit('currentPlayers', players);
     socket.broadcast.emit('newPlayer', players[socket.id]);
