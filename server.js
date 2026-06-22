@@ -41,7 +41,8 @@ io.on('connection', (socket) => {
         isMoving: false,
         isBroadcasting: false,
         avatar: data.avatar,    
-        playerName: data.name   
+        playerName: data.name,
+        agoraUid: data.agoraUid 
     };
     
     // Beri tahu komputer pemain bahwa dia BERHASIL MASUK
