@@ -30,7 +30,8 @@ io.on('connection', (socket) => {
         isMoving: false,
         isBroadcasting: false,
         avatar: data.avatar,    // Menyimpan avatar ('boy' atau 'girl')
-        playerName: data.name   // Menyimpan nama ketikan pemain
+        playerName: data.name,   // Menyimpan nama ketikan pemain
+        agoraUid: data.agoraUid
     };
     
     socket.emit('currentPlayers', players);
