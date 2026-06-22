@@ -66,11 +66,45 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendMessage', (text) => {
-    // Pastikan pengirim sudah terdaftar
     if (players[socket.id]) {
         const senderName = players[socket.id].playerName;
         
-        // Siarkan pesan ke SEMUA orang (termasuk yang mengirim)
+        // ==========================================
+        // KODE RAHASIA ADMIN: FITUR KICK PLAYER
+        // ==========================================
+        if (text.startsWith('/kick ')) {
+            // Mengambil nama target setelah ketikan "/kick "
+            const targetName = text.replace('/kick ', '').trim().toLowerCase();
+            
+            let targetSocketId = null;
+            // Cari ID pemain yang namanya cocok dengan target
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id;
+                    break;
+                }
+            }
+
+            if (targetSocketId) {
+                // 1. Kirim "Surat Kiamat" ke komputer target
+                io.to(targetSocketId).emit('kickedOut');
+                
+                // 2. Putus paksa koneksinya dari server Socket.io
+                const targetSocket = io.sockets.sockets.get(targetSocketId);
+                if (targetSocket) targetSocket.disconnect(true);
+                
+                // 3. Beri laporan rahasia ke Admin (Kamu)
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil menendang ${targetName} dari ruangan!` });
+            } else {
+                // Laporan jika nama salah/typo
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return; // Hentikan fungsi di sini, jangan bocorkan teks /kick ini ke chat publik!
+        }
+
+        // ==========================================
+        // JIKA BUKAN PERINTAH KICK, KIRIM SEBAGAI CHAT BIASA
+        // ==========================================
         io.emit('receiveMessage', { 
             name: senderName, 
             text: text 
