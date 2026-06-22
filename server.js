@@ -28,6 +28,7 @@ io.on('connection', (socket) => {
         id: socket.id,
         direction: 'down',
         isMoving: false,
+        isBroadcasting: false,
         avatar: data.avatar,    // Menyimpan avatar ('boy' atau 'girl')
         playerName: data.name   // Menyimpan nama ketikan pemain
     };
@@ -43,7 +44,8 @@ io.on('connection', (socket) => {
         players[socket.id].x = movementData.x;
         players[socket.id].y = movementData.y;
         players[socket.id].direction = movementData.direction; 
-        players[socket.id].isMoving = movementData.isMoving; 
+        players[socket.id].isMoving = movementData.isMoving;
+        players[socket.id].isBroadcasting = movementData.isBroadcasting;
 
         socket.broadcast.emit('playerMoved', players[socket.id]);
     }
