@@ -65,6 +65,16 @@ io.on('connection', (socket) => {
     }
   });
 
+socket.on('sendEmote', (emoji) => {
+    // Pastikan pengirim terdaftar
+    if (players[socket.id]) {
+        socket.broadcast.emit('receiveEmote', { 
+            playerId: socket.id, 
+            emoji: emoji 
+        });
+    }
+  });
+  
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
     if (players[socket.id]) {
@@ -73,6 +83,8 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
