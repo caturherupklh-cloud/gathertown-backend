@@ -102,6 +102,32 @@ io.on('connection', (socket) => {
             return; // Hentikan fungsi di sini, jangan bocorkan teks /kick ini ke chat publik!
         }
 
+      // ==========================================
+        // KODE RAHASIA ADMIN: FITUR STOP SHARE SCREEN
+        // ==========================================
+        if (text.startsWith('/stopscreen ')) {
+            const targetName = text.replace('/stopscreen ', '').trim().toLowerCase();
+            
+            let targetSocketId = null;
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id;
+                    break;
+                }
+            }
+
+            if (targetSocketId) {
+                // Tembakkan sinyal pemutus layar ke komputer target
+                io.to(targetSocketId).emit('forceStopScreen');
+                
+                // Laporan ke Admin
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil menghentikan Share Screen ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Gagal! Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return; // Hentikan fungsi di sini
+        }
+
         // ==========================================
         // JIKA BUKAN PERINTAH KICK, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
