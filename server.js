@@ -128,6 +128,46 @@ io.on('connection', (socket) => {
             return; // Hentikan fungsi di sini
         }
 
+      // ==========================================
+        // KODE RAHASIA ADMIN: FITUR MUTE MIC
+        // ==========================================
+        if (text.startsWith('/mute ')) {
+            const targetName = text.replace('/mute ', '').trim().toLowerCase();
+            let targetSocketId = null;
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id; break;
+                }
+            }
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('forceMute');
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil mematikan Mic ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return; // Hentikan fungsi di sini
+        }
+
+        // ==========================================
+        // KODE RAHASIA ADMIN: FITUR MATIKAN KAMERA
+        // ==========================================
+        if (text.startsWith('/camoff ')) {
+            const targetName = text.replace('/camoff ', '').trim().toLowerCase();
+            let targetSocketId = null;
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id; break;
+                }
+            }
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('forceCamOff');
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil mematikan Kamera ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return; // Hentikan fungsi di sini
+        }
+
         // ==========================================
         // JIKA BUKAN PERINTAH KICK, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
