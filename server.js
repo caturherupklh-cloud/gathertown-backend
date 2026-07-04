@@ -22,59 +22,83 @@ const LIVEKIT_API_SECRET = "HAyKkmCV3bXdwUu1fs1T08SfzSExm8CPCFKazv18X6y";
 const ROOM_NAME = "MandatBumi_Global";
 
 const players = {}; 
+let currentAdminId = null; 
+let pendingUsers = {};
 
 io.on('connection', (socket) => {
-  console.log('Koneksi baru masuk (belum login):', socket.id);
+    console.log('Koneksi baru masuk (belum login):', socket.id);
 
-  const PIN_RAHASIA = "15072023"; 
+    socket.on('joinGame', (data) => {
+        // 1. Cek apakah pintu sedang dikunci oleh Admin
+        if (currentAdminId && currentAdminId !== socket.id) {
+            pendingUsers[socket.id] = data; 
+            socket.emit('loginPending'); 
+            io.to(currentAdminId).emit('joinRequest', { 
+                id: socket.id, 
+                name: data.name, 
+                avatar: data.avatar 
+            });
+        } else {
+            // 2. Pintu terbuka bebas, langsung izinkan masuk
+            prosesMasukLolos(socket.id, data);
+        }
+    });
 
-  socket.on('joinGame', async (data) => {
-      
-    if (data.pin !== PIN_RAHASIA) {
-        socket.emit('loginFailed', "❌ Akses Ditolak: PIN Rahasia Salah!");
-        console.log(`Penyusup ditolak: ${socket.id}`);
-        return; 
+    // UBAH JADI ASYNC: Fungsi pemroses pemain yang berhasil lolos
+    async function prosesMasukLolos(targetSocketId, data) {
+        try {
+            // A. Cetak Tiket LiveKit DULU
+            const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+              identity: targetSocketId,
+              name: data.name,
+            });
+            at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
+            const tokenLiveKit = await at.toJwt();
+
+            // B. Simpan Data Pemain
+            players[targetSocketId] = {
+                x: 1200, 
+                y: 245,
+                id: targetSocketId,
+                direction: 'down',
+                isMoving: false,
+                isBroadcasting: false,
+                avatar: data.avatar,
+                playerName: data.name,
+                inCall: false, callTarget: null
+            };
+
+            // C. Kirim Sukses beserta Tiket LiveKit!
+            io.to(targetSocketId).emit('loginSuccess', { 
+                id: targetSocketId, 
+                players: players,
+                livekitToken: tokenLiveKit
+            });
+            
+            io.emit('playerJoined', players[targetSocketId]);
+            io.emit('currentPlayers', players);
+            socket.broadcast.emit('newPlayer', players[targetSocketId]);
+            console.log(`Pemain ${targetSocketId} berhasil lolos. Tiket LiveKit diberikan.`);
+        } catch (error) {
+            console.error("Gagal mencetak tiket:", error);
+            io.to(targetSocketId).emit('loginFailed', "❌ Error: Peladen gagal mencetak tiket video.");
+        }
     }
 
-    try {
-        // --- MESIN PENCETAK TIKET LIVEKIT ---
-        const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-          identity: socket.id,
-          name: data.name,
-        });
+    // 3. Tangkap Keputusan Admin
+    socket.on('adminResponse', (res) => {
+        if (socket.id !== currentAdminId) return; 
         
-        at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
-        
-        const tokenLiveKit = await at.toJwt();
-        // ------------------------------------
+        let targetData = pendingUsers[res.targetId];
+        if (!targetData) return;
 
-        players[socket.id] = { 
-            x: 100, 
-            y: 100, 
-            id: socket.id,
-            direction: 'down',
-            isMoving: false,
-            isBroadcasting: false,
-            avatar: data.avatar,    
-            playerName: data.name,
-            inCall: false,      
-            callTarget: null
-        };
-        
-        // PENTING: Mengirim tiket kembali ke Frontend!
-        socket.emit('loginSuccess', { 
-            livekitToken: tokenLiveKit 
-        }); 
-        
-        socket.emit('currentPlayers', players);
-        socket.broadcast.emit('newPlayer', players[socket.id]);
-        console.log(`Pemain ${socket.id} resmi masuk. Tiket LiveKit berhasil dicetak!`);
-        
-    } catch (error) {
-        console.error("Gagal mencetak tiket:", error);
-        socket.emit('loginFailed', "❌ Error: Peladen gagal mencetak tiket video.");
-    }
-  });
+        if (res.action === 'approve') {
+            prosesMasukLolos(res.targetId, targetData);
+        } else {
+            io.to(res.targetId).emit('loginRejected', { message: '❌ Maaf, Admin menolak permintaan masuk Anda.' });
+        }
+        delete pendingUsers[res.targetId]; 
+    });
   
   socket.on('playerMovement', (movementData) => {
     // Pastikan pemain sudah terdaftar sebelum memproses pergerakan
@@ -296,6 +320,31 @@ io.on('connection', (socket) => {
             socket.emit('receiveMessage', { name: "🤖 System", text: `🗺️ Radar Minimap Admin diaktifkan/dimatikan.` });
             return;
         }
+
+      // ==========================================
+        // KODE RAHASIA: KLAIM SUPER ADMIN
+        // ==========================================
+        if (text.trim() === '/jadiadmin') {
+            if (!currentAdminId) {
+                currentAdminId = socket.id;
+                socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Anda sekarang adalah SUPER ADMIN! Pintu masuk telah dikunci. Anda yang menentukan siapa yang boleh masuk.` });
+                io.emit('receiveMessage', { name: "🤖 System", text: `👑 ${players[socket.id].playerName} telah menjadi Super Admin ruangan ini!` });
+            } else if (currentAdminId === socket.id) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Anda sudah menjadi admin.` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Sudah ada Admin lain di ruangan ini.` });
+            }
+            return;
+        }
+
+        if (text.trim() === '/lepasadmin') {
+            if (currentAdminId === socket.id) {
+                currentAdminId = null;
+                io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Admin telah melepas jabatannya. Pintu masuk kembali terbuka bebas untuk umum.` });
+            }
+            return;
+        }
+      
         // ==========================================
         // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
@@ -318,6 +367,10 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
+    if (currentAdminId === socket.id) {
+            currentAdminId = null;
+            io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Admin terputus dari server. Pintu masuk kembali terbuka bebas.` });
+        }
     if (players[socket.id]) {
         delete players[socket.id];
         io.emit('playerDisconnected', socket.id);
