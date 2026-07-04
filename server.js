@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-// 1. TAMBAHKAN PUSTAKA LIVEKIT DI SINI
+// PUSTAKA LIVEKIT
 const { AccessToken } = require('livekit-server-sdk');
 
 const app = express();
@@ -16,7 +16,7 @@ const io = new Server(server, {
   }
 });
 
-// 2. MASUKKAN KUNCI RAHASIA LIVEKIT (Hanya boleh ada di server.js!)
+// KUNCI RAHASIA LIVEKIT (Hanya Server yang Tahu)
 const LIVEKIT_API_KEY = "APIDdNDQy6Txpnj";
 const LIVEKIT_API_SECRET = "HAyKkmCV3bXdwUu1fs1T08SfzSExm8CPCFKazv18X6y";
 const ROOM_NAME = "MandatBumi_Global";
@@ -36,41 +36,43 @@ io.on('connection', (socket) => {
         return; 
     }
 
-    // --- 3. KODE BARU: PENCETAK TIKET LIVEKIT OTOMATIS ---
-    // Menggunakan socket.id sebagai identitas unik pemain di dalam LiveKit
-    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-      identity: socket.id,
-      name: data.name,
-    });
-    
-    // Berikan izin untuk masuk, mengirim video/audio, dan menerima video/audio
-    at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
-    
-    // Cetak tokennya menjadi string
-    const tokenLiveKit = await at.toJwt();
-    // ----------------------------------------------------
+    try {
+        // --- MESIN PENCETAK TIKET LIVEKIT ---
+        const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+          identity: socket.id,
+          name: data.name,
+        });
+        
+        at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
+        
+        const tokenLiveKit = await at.toJwt();
+        // ------------------------------------
 
-    players[socket.id] = { 
-        x: 100, 
-        y: 100, 
-        id: socket.id,
-        direction: 'down',
-        isMoving: false,
-        isBroadcasting: false,
-        avatar: data.avatar,    
-        playerName: data.name   
-    };
-    
-    // 4. SELIPKAN TOKEN KE DALAM PENGIRIMAN LOGIN SUCCESS
-    socket.emit('loginSuccess', { 
-        livekitToken: tokenLiveKit 
-    }); 
-    
-    socket.emit('currentPlayers', players);
-    socket.broadcast.emit('newPlayer', players[socket.id]);
-    console.log(`Pemain ${socket.id} resmi masuk. Tiket LiveKit berhasil dicetak!`);
+        players[socket.id] = { 
+            x: 100, 
+            y: 100, 
+            id: socket.id,
+            direction: 'down',
+            isMoving: false,
+            isBroadcasting: false,
+            avatar: data.avatar,    
+            playerName: data.name   
+        };
+        
+        // PENTING: Mengirim tiket kembali ke Frontend!
+        socket.emit('loginSuccess', { 
+            livekitToken: tokenLiveKit 
+        }); 
+        
+        socket.emit('currentPlayers', players);
+        socket.broadcast.emit('newPlayer', players[socket.id]);
+        console.log(`Pemain ${socket.id} resmi masuk. Tiket LiveKit berhasil dicetak!`);
+        
+    } catch (error) {
+        console.error("Gagal mencetak tiket:", error);
+        socket.emit('loginFailed', "❌ Error: Peladen gagal mencetak tiket video.");
+    }
   });
-
   
   socket.on('playerMovement', (movementData) => {
     // Pastikan pemain sudah terdaftar sebelum memproses pergerakan
