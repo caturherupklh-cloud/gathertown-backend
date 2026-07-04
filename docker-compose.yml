@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  mandatbumi-backend:
+    build: .
+    container_name: server-mandatbumi
+    ports:
+      - "3000:3000"
+    restart: always
+    environment:
+      - NODE_ENV=production
