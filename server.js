@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+// 1. TAMBAHKAN PUSTAKA LIVEKIT DI SINI
+const { AccessToken } = require('livekit-server-sdk');
 
 const app = express();
 app.use(cors());
@@ -14,25 +16,40 @@ const io = new Server(server, {
   }
 });
 
+// 2. MASUKKAN KUNCI RAHASIA LIVEKIT (Hanya boleh ada di server.js!)
+const LIVEKIT_API_KEY = "APIDdNDQy6Txpnj";
+const LIVEKIT_API_SECRET = "HAyKkmCV3bXdwUu1fs1T08SfzSExm8CPCFKazv18X6y";
+const ROOM_NAME = "MandatBumi_Global";
+
 const players = {}; 
 
 io.on('connection', (socket) => {
   console.log('Koneksi baru masuk (belum login):', socket.id);
 
-  // --- KODE PENJAGA GERBANG (SECURITY) ---
   const PIN_RAHASIA = "15072023"; 
 
-  // Server menunggu event 'joinGame' dari frontend
-  socket.on('joinGame', (data) => {
+  socket.on('joinGame', async (data) => {
       
     if (data.pin !== PIN_RAHASIA) {
-        // Jika PIN salah, tendang dan kirim pesan error!
         socket.emit('loginFailed', "❌ Akses Ditolak: PIN Rahasia Salah!");
         console.log(`Penyusup ditolak: ${socket.id}`);
-        return; // Hentikan proses di sini
+        return; 
     }
 
-    // Jika PIN benar, jalankan pendaftaran seperti biasa
+    // --- 3. KODE BARU: PENCETAK TIKET LIVEKIT OTOMATIS ---
+    // Menggunakan socket.id sebagai identitas unik pemain di dalam LiveKit
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity: socket.id,
+      name: data.name,
+    });
+    
+    // Berikan izin untuk masuk, mengirim video/audio, dan menerima video/audio
+    at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
+    
+    // Cetak tokennya menjadi string
+    const tokenLiveKit = await at.toJwt();
+    // ----------------------------------------------------
+
     players[socket.id] = { 
         x: 100, 
         y: 100, 
@@ -41,17 +58,19 @@ io.on('connection', (socket) => {
         isMoving: false,
         isBroadcasting: false,
         avatar: data.avatar,    
-        playerName: data.name,
-        agoraUid: data.agoraUid 
+        playerName: data.name   
     };
     
-    // Beri tahu komputer pemain bahwa dia BERHASIL MASUK
-    socket.emit('loginSuccess'); 
+    // 4. SELIPKAN TOKEN KE DALAM PENGIRIMAN LOGIN SUCCESS
+    socket.emit('loginSuccess', { 
+        livekitToken: tokenLiveKit 
+    }); 
     
     socket.emit('currentPlayers', players);
     socket.broadcast.emit('newPlayer', players[socket.id]);
-    console.log(`Pemain ${socket.id} resmi masuk sebagai ${data.name} (${data.avatar})`);
+    console.log(`Pemain ${socket.id} resmi masuk. Tiket LiveKit berhasil dicetak!`);
   });
+
   
   socket.on('playerMovement', (movementData) => {
     // Pastikan pemain sudah terdaftar sebelum memproses pergerakan
