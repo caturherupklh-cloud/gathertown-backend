@@ -287,6 +287,15 @@ io.on('connection', (socket) => {
             }
             return;
         }
+
+        // ==========================================
+        // KODE RAHASIA ADMIN: TOGGLE MINIMAP
+        // ==========================================
+        if (text.trim() === '/minimap') {
+            socket.emit('toggleMinimap');
+            socket.emit('receiveMessage', { name: "🤖 System", text: `🗺️ Radar Minimap Admin diaktifkan/dimatikan.` });
+            return;
+        }
         // ==========================================
         // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
