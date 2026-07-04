@@ -56,7 +56,9 @@ io.on('connection', (socket) => {
             isMoving: false,
             isBroadcasting: false,
             avatar: data.avatar,    
-            playerName: data.name   
+            playerName: data.name,
+            inCall: false,      
+            callTarget: null
         };
         
         // PENTING: Mengirim tiket kembali ke Frontend!
@@ -229,7 +231,62 @@ io.on('connection', (socket) => {
             }
             return;
         }
-      
+
+        // ==========================================
+        // KODE RAHASIA ADMIN: SUPER CALL
+        // ==========================================
+        if (text.startsWith('/call ')) {
+            const targetName = text.replace('/call ', '').trim().toLowerCase();
+            let targetSocketId = null;
+            
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id; break;
+                }
+            }
+            
+            if (targetSocketId) {
+                // Kunci mereka berdua ke dalam mode panggilan
+                players[socket.id].inCall = true;
+                players[socket.id].callTarget = targetSocketId;
+                players[targetSocketId].inCall = true;
+                players[targetSocketId].callTarget = socket.id;
+                
+                // Siarkan status ke seluruh peta agar orang lain berhenti mendengarkan mereka
+                io.emit('playerMoved', players[socket.id]);
+                io.emit('playerMoved', players[targetSocketId]);
+
+                // Kirim sinyal ke client masing-masing untuk membuka jalur WebRTC khusus
+                socket.emit('callStarted', { targetId: targetSocketId, targetName: players[targetSocketId].playerName, isAdmin: true });
+                io.to(targetSocketId).emit('callStarted', { targetId: socket.id, targetName: senderName, isAdmin: false });
+                
+                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Saluran komunikasi rahasia terhubung dengan ${targetName}!` });
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain "${targetName}" tidak ditemukan.` });
+            }
+            return;
+        }
+
+        // CUKUP KETIK /endcall TANPA NAMA
+        if (text.trim() === '/endcall') {
+            const targetSocketId = players[socket.id].callTarget;
+            
+            // 1. Bebaskan status Admin
+            players[socket.id].inCall = false;
+            players[socket.id].callTarget = null;
+            io.emit('playerMoved', players[socket.id]);
+            socket.emit('callEnded');
+            socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Panggilan rahasia dihentikan.` });
+
+            // 2. Bebaskan status Target
+            if (targetSocketId && players[targetSocketId]) {
+                players[targetSocketId].inCall = false;
+                players[targetSocketId].callTarget = null;
+                io.emit('playerMoved', players[targetSocketId]);
+                io.to(targetSocketId).emit('callEnded');
+            }
+            return;
+        }
         // ==========================================
         // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA
         // ==========================================
