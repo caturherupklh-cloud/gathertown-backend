@@ -192,53 +192,46 @@ io.on('connection', (socket) => {
         }
         
         // ==========================================
-        // KODE RAHASIA ADMIN: FITUR KICK PLAYER
-        // ==========================================
-        if (text.startsWith('/kick ')) {
-            // Mengambil nama target setelah ketikan "/kick "
-            const targetName = text.replace('/kick ', '').trim().toLowerCase();
-            
-            let targetSocketId = null;
-            // Cari ID pemain yang namanya cocok dengan target
-            for (let id in players) {
-                if (players[id].playerName.toLowerCase() === targetName) {
-                    targetSocketId = id;
-                    break;
-                }
-            }
-
-            if (targetSocketId) {
-                // --- SISTEM ANTI-KUDETA ---
-                // 1. Tidak ada yang boleh menendang Admin Utama
-                if (targetSocketId === mainAdminId) {
-                    socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Anda tidak bisa menendang Admin Utama.` });
-                    return;
-                }
-                
-                // 2. Sesama Co-Host tidak boleh saling menendang (Opsional, tapi sangat disarankan)
-                if (isCoHost && coHostIds.includes(targetSocketId)) {
-                    socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Sesama Co-Host tidak diperbolehkan saling menendang.` });
-                    return;
-                }
-               
-            if (targetSocketId) {
-                // 1. Kirim "Surat Kiamat" ke komputer target
-                io.to(targetSocketId).emit('kickedOut');
-                
-                // 2. Putus paksa koneksinya dari server Socket.io
-                const targetSocket = io.sockets.sockets.get(targetSocketId);
-                if (targetSocket) targetSocket.disconnect(true);
-                
-                // 3. Beri laporan rahasia ke Admin (Kamu)
-                socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil menendang ${targetName} dari ruangan!` });
-            } else {
-                // Laporan jika nama salah/typo
-                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
-            }
-
-          
-            return; // Hentikan fungsi di sini, jangan bocorkan teks /kick ini ke chat publik!
+// KODE RAHASIA ADMIN: FITUR KICK PLAYER
+// ==========================================
+if (text.startsWith('/kick ')) {
+    const targetName = text.replace('/kick ', '').trim().toLowerCase();
+    
+    let targetSocketId = null;
+    for (let id in players) {
+        // PERBAIKAN: Gunakan .name, bukan .playerName
+        if (players[id].name.toLowerCase() === targetName) {
+            targetSocketId = id;
+            break;
         }
+    }
+
+    if (targetSocketId) {
+        // --- SISTEM ANTI-KUDETA ---
+        if (targetSocketId === mainAdminId) {
+            socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Anda tidak bisa menendang Admin Utama.` });
+            return;
+        }
+        
+        // PERBAIKAN: Validasi hak akses Co-Host dilakukan langsung di dalam kondisi
+        if (coHostIds.includes(socket.id) && coHostIds.includes(targetSocketId)) {
+            socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Sesama Co-Host tidak diperbolehkan saling menendang.` });
+            return;
+        }
+       
+        // Eksekusi Kick
+        io.to(targetSocketId).emit('kickedOut');
+        
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) targetSocket.disconnect(true);
+        
+        socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil menendang ${targetName} dari ruangan!` });
+    } else {
+        socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+    }
+    
+    return; 
+}
 
       // ==========================================
         // KODE RAHASIA ADMIN: FITUR STOP SHARE SCREEN
@@ -463,7 +456,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-      // ==========================================
+        // ==========================================
         // LEPAS JABATAN CO-HOST (HANYA OLEH ADMIN UTAMA)
         // ==========================================
         if (text.startsWith('/lepascohost ')) {
