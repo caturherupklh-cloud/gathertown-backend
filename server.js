@@ -22,7 +22,8 @@ const LIVEKIT_API_SECRET = "HAyKkmCV3bXdwUu1fs1T08SfzSExm8CPCFKazv18X6y";
 const ROOM_NAME = "MandatBumi_Global";
 
 const players = {}; 
-let currentAdminId = null; 
+let mainAdminId = null; // Menyimpan ID Admin Utama
+let coHostIds = [];     // Array untuk menampung banyak Co-Host (Admin Pembantu)
 let pendingUsers = {};
 
 io.on('connection', (socket) => {
@@ -63,16 +64,19 @@ io.on('connection', (socket) => {
 
 
         // 1. Cek apakah pintu sedang dikunci oleh Admin
-        if (currentAdminId && currentAdminId !== socket.id) {
-            pendingUsers[socket.id] = data; 
+        if (mainAdminId && socket.id !== mainAdminId && !coHostIds.includes(socket.id)) {
+            pendingUsers[socket.id] = data;
             socket.emit('loginPending'); 
-            io.to(currentAdminId).emit('joinRequest', { 
-                id: socket.id, 
-                name: data.name, 
-                avatar: data.avatar 
+            
+            // Kirim notifikasi ke Admin Utama
+            io.to(mainAdminId).emit('joinRequest', { id: socket.id, name: data.name, avatar: data.avatar });
+            
+            // Kirim juga ke semua Co-Host agar bisa bantu menyetujui
+            coHostIds.forEach(coHostId => {
+                io.to(coHostId).emit('joinRequest', { id: socket.id, name: data.name, avatar: data.avatar });
             });
         } else {
-            // 2. Pintu terbuka bebas, langsung izinkan masuk
+            // Pintu terbuka bebas, langsung izinkan masuk
             prosesMasukLolos(socket.id, data);
         }
     });
@@ -124,7 +128,7 @@ io.on('connection', (socket) => {
 
     // 3. Tangkap Keputusan Admin
     socket.on('adminResponse', (res) => {
-        if (socket.id !== currentAdminId) return; 
+        if (socket.id !== mainAdminId && !coHostIds.includes(socket.id)) return;
         
         let targetData = pendingUsers[res.targetId];
         if (!targetData) return;
@@ -172,6 +176,20 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', (text) => {
     if (players[socket.id]) {
         const senderName = players[socket.id].playerName;
+       // ==========================================
+        // SATPAM HIRARKI: CEK STATUS ADMIN
+        // ==========================================
+        const isMainAdmin = (socket.id === mainAdminId);
+        const isCoHost = coHostIds.includes(socket.id);
+        const isAnyAdmin = isMainAdmin || isCoHost;
+
+        // Daftar semua perintah rahasia admin
+        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ');
+
+        if (isAdminCommand && !isAnyAdmin) {
+            socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Anda bukan bagian dari Tim Admin.` });
+            return; 
+        }
         
         // ==========================================
         // KODE RAHASIA ADMIN: FITUR KICK PLAYER
@@ -377,26 +395,74 @@ io.on('connection', (socket) => {
             return;
         }
 
-      // ==========================================
-        // KODE RAHASIA: KLAIM SUPER ADMIN
+        // ==========================================
+        // KLAIM ADMIN UTAMA
         // ==========================================
         if (text.trim() === '/bismillah') {
-            if (!currentAdminId) {
-                currentAdminId = socket.id;
-                socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Anda sekarang adalah SUPER ADMIN! Pintu masuk telah dikunci. Anda yang menentukan siapa yang boleh masuk.` });
-                io.emit('receiveMessage', { name: "🤖 System", text: `👑 ${players[socket.id].playerName} telah menjadi Super Admin ruangan ini!` });
-            } else if (currentAdminId === socket.id) {
-                socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Anda sudah menjadi admin.` });
+            if (!mainAdminId) {
+                mainAdminId = socket.id;
+                socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Selamat! Anda sekarang adalah ADMIN UTAMA. Pintu masuk telah dikunci secara otomatis.` });
+                io.emit('receiveMessage', { name: "🤖 System", text: `👑 ${players[socket.id].playerName} telah mengklaim posisi sebagai Admin Utama ruangan ini!` });
+            } else if (isMainAdmin) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Anda sudah menjadi Admin Utama.` });
             } else {
-                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Sudah ada Admin lain di ruangan ini.` });
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Gagal! Sudah ada Admin Utama di ruangan ini.` });
             }
             return;
         }
 
+        // ==========================================
+        // PENUNJUKAN CO-HOST (HANYA OLEH ADMIN UTAMA)
+        // ==========================================
+        if (text.startsWith('/jadicohost ')) {
+            if (!isMainAdmin) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Hanya Admin Utama yang memiliki hak prerogative menunjuk Co-Host.` });
+                return;
+            }
+
+            const targetName = text.replace('/jadicohost ', '').trim().toLowerCase();
+            let targetSocketId = null;
+
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id;
+                    break;
+                }
+            }
+
+            if (targetSocketId) {
+                if (targetSocketId === mainAdminId) {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Orang tersebut adalah diri Anda sendiri (Admin Utama).` });
+                } else if (coHostIds.includes(targetSocketId)) {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ ${players[targetSocketId].playerName} sudah menjadi Co-Host sebelumnya.` });
+                } else {
+                    coHostIds.push(targetSocketId);
+                    io.to(targetSocketId).emit('receiveMessage', { name: "🤖 System", text: `👑 Anda telah diangkat menjadi Co-Host (Admin Pembantu) oleh Admin Utama!` });
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil mengangkat ${players[targetSocketId].playerName} sebagai Co-Host.` });
+                    io.emit('receiveMessage', { name: "🤖 System", text: `👥 PENGUMUMAN: ${players[targetSocketId].playerName} sekarang resmi menjadi Co-Host ruangan!` });
+                }
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return;
+        }
+
+        // ==========================================
+        // LEPAS JABATAN ADMIN
+        // ==========================================
         if (text.trim() === '/lepasadmin') {
-            if (currentAdminId === socket.id) {
-                currentAdminId = null;
-                io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Admin telah melepas jabatannya. Pintu masuk kembali terbuka bebas untuk umum.` });
+            if (isMainAdmin) {
+                mainAdminId = null;
+                io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Admin Utama telah meletakkan jabatannya.` });
+                if (coHostIds.length === 0) {
+                    io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Pintu masuk kembali terbuka bebas untuk umum.` });
+                }
+            } else if (isCoHost) {
+                coHostIds = coHostIds.filter(id => id !== socket.id);
+                io.emit('receiveMessage', { name: "🤖 System", text: `🔓 ${players[socket.id].playerName} berhenti menjadi Co-Host.` });
+                if (!mainAdminId && coHostIds.length === 0) {
+                    io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Pintu masuk kembali terbuka bebas untuk umum.` });
+                }
             }
             return;
         }
@@ -423,10 +489,24 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
-    if (currentAdminId === socket.id) {
-            currentAdminId = null;
-            io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Admin terputus dari server. Pintu masuk kembali terbuka bebas.` });
+    
+    // Jika Admin Utama yang DC
+    if (mainAdminId === socket.id) {
+        mainAdminId = null;
+        io.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Admin Utama terputus dari server.` });
+        if (coHostIds.length === 0) {
+            io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Pintu masuk kembali terbuka bebas.` });
         }
+    }
+    
+    // Jika Co-Host yang DC
+    if (coHostIds.includes(socket.id)) {
+        coHostIds = coHostIds.filter(id => id !== socket.id);
+        if (!mainAdminId && coHostIds.length === 0) {
+            io.emit('receiveMessage', { name: "🤖 System", text: `🔓 Semua management admin terputus. Pintu kembali terbuka bebas.` });
+        }
+    }
+
     if (players[socket.id]) {
         delete players[socket.id];
         io.emit('playerDisconnected', socket.id);
