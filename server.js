@@ -410,15 +410,25 @@ if (text.startsWith('/kick ')) {
         // ==========================================
         // KLAIM ADMIN UTAMA
         // ==========================================
-        if (text.trim() === '/bismillah') {
-            if (!mainAdminId) {
-                mainAdminId = socket.id;
-                socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Selamat! Anda sekarang adalah ADMIN UTAMA. Pintu masuk telah dikunci secara otomatis.` });
-                io.emit('receiveMessage', { name: "🤖 System", text: `👑 ${players[socket.id].playerName} telah mengklaim posisi sebagai Admin Utama ruangan ini!` });
-            } else if (isMainAdmin) {
-                socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Anda sudah menjadi Admin Utama.` });
+        // ==========================================
+        // KLAIM ADMIN UTAMA DENGAN PASSWORD
+        // ==========================================
+        if (text.startsWith('/bismillah ')) {
+            const passwordInput = text.replace('/bismillah ', '').trim();
+
+            if (passwordInput === VIP_PASSWORD) { // <-- GitHub hanya nampilin teks VIP_PASSWORD
+                if (!mainAdminId) {
+                    mainAdminId = socket.id;
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Selamat! Anda sekarang adalah ADMIN UTAMA. Pintu masuk telah dikunci secara otomatis.` });
+                    io.emit('receiveMessage', { name: "🤖 System", text: `👑 ${players[socket.id].playerName} telah mengklaim posisi sebagai Admin Utama ruangan ini!` });
+                } else if (isMainAdmin) {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ Anda sudah menjadi Admin Utama.` });
+                } else {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Gagal! Sudah ada Admin Utama di ruangan ini.` });
+                }
             } else {
-                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Gagal! Sudah ada Admin Utama di ruangan ini.` });
+                // Jika password salah
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Password Admin salah.` });
             }
             return;
         }
