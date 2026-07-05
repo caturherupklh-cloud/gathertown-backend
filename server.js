@@ -159,7 +159,7 @@ io.on('connection', (socket) => {
                     let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
                     let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
 
-                    if (jarakX < 450 && jarakY < 360) {
+                    if (players[socket.id].isBroadcasting || (jarakX < 450 && jarakY < 360)) {
                         // SUPER HEMAT: Selipkan 'socket.id' di urutan paling depan Array,
                         // sehingga ukurannya menjadi: [id, x, y, dir, mov, brod, vx, vy]
                         io.to(targetId).emit('playerMoved', [socket.id, ...pack]);
