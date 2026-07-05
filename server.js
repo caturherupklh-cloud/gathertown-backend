@@ -199,8 +199,7 @@ if (text.startsWith('/kick ')) {
     
     let targetSocketId = null;
     for (let id in players) {
-        // PERBAIKAN: Gunakan .name, bukan .playerName
-        if (players[id].name.toLowerCase() === targetName) {
+        if (players[id].playerName.toLowerCase() === targetName) {
             targetSocketId = id;
             break;
         }
