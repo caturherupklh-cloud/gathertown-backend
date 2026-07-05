@@ -184,7 +184,7 @@ io.on('connection', (socket) => {
         const isAnyAdmin = isMainAdmin || isCoHost;
 
         // Daftar semua perintah rahasia admin
-        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ' || text.trim() === '/lepascohost');
+        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ') || text.trim() === '/lepascohost';
 
         if (isAdminCommand && !isAnyAdmin) {
             socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Anda bukan bagian dari Tim Admin.` });
