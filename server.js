@@ -116,8 +116,10 @@ io.on('connection', (socket) => {
                     let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
                     let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
 
-                    // Hanya kirim sinyal pergerakan ke pemain yang ada dalam radius layar!
-                    if (jarakX < 1000 && jarakY < 800) {
+                    // --- SISTEM AREA OF INTEREST (AOI) - ULTRA HEMAT ---
+                    // Jarak layar asli ke tepi: X = 400, Y = 320. 
+                    // Buffer agresif +50px dan +40px untuk efisiensi maksimal.
+                    if (jarakX < 450 && jarakY < 360) {
                         io.to(targetId).emit('playerMoved', players[socket.id]);
                     }
                 }
