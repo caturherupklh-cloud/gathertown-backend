@@ -101,17 +101,29 @@ io.on('connection', (socket) => {
     });
   
   socket.on('playerMovement', (movementData) => {
-    // Pastikan pemain sudah terdaftar sebelum memproses pergerakan
-    if (players[socket.id]) {
-        players[socket.id].x = movementData.x;
-        players[socket.id].y = movementData.y;
-        players[socket.id].direction = movementData.direction; 
-        players[socket.id].isMoving = movementData.isMoving;
-        players[socket.id].isBroadcasting = movementData.isBroadcasting;
+        if (players[socket.id]) {
+            players[socket.id].x = movementData.x;
+            players[socket.id].y = movementData.y;
+            players[socket.id].direction = movementData.direction; 
+            players[socket.id].isMoving = movementData.isMoving;
+            players[socket.id].isBroadcasting = movementData.isBroadcasting;
 
-        socket.broadcast.emit('playerMoved', players[socket.id]);
-    }
-  });
+            // --- SISTEM AREA OF INTEREST (AOI) ---
+            // Layar berukuran 800x640. Kita gunakan jarak 1000x800 sebagai batas pandang.
+            for (let targetId in players) {
+                if (targetId !== socket.id) {
+                    let targetPlayer = players[targetId];
+                    let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
+                    let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
+
+                    // Hanya kirim sinyal pergerakan ke pemain yang ada dalam radius layar!
+                    if (jarakX < 1000 && jarakY < 800) {
+                        io.to(targetId).emit('playerMoved', players[socket.id]);
+                    }
+                }
+            }
+        }
+    });
 
   socket.on('sendMessage', (text) => {
     if (players[socket.id]) {
@@ -324,7 +336,7 @@ io.on('connection', (socket) => {
       // ==========================================
         // KODE RAHASIA: KLAIM SUPER ADMIN
         // ==========================================
-        if (text.trim() === '/jadiadmin') {
+        if (text.trim() === '/bismillah') {
             if (!currentAdminId) {
                 currentAdminId = socket.id;
                 socket.emit('receiveMessage', { name: "🤖 System", text: `👑 Anda sekarang adalah SUPER ADMIN! Pintu masuk telah dikunci. Anda yang menentukan siapa yang boleh masuk.` });
@@ -378,6 +390,17 @@ io.on('connection', (socket) => {
   });
 
 }); // <-- Kurung penutup utama yang sebelumnya hilang atau bergeser
+
+// ==========================================
+// SISTEM RADAR GLOBAL (HEARTBEAT)
+// ==========================================
+// Mengirim update posisi semua orang setiap 3 detik 
+// agar fitur Minimap Admin tetap bekerja dan pemain yang jauh tidak "nyangkut"
+setInterval(() => {
+    if (Object.keys(players).length > 0) {
+        io.emit('globalSync', players);
+    }
+}, 3000);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
