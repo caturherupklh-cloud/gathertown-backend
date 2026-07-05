@@ -184,7 +184,7 @@ io.on('connection', (socket) => {
         const isAnyAdmin = isMainAdmin || isCoHost;
 
         // Daftar semua perintah rahasia admin
-        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ');
+        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ' || text.trim() === '/lepascohost');
 
         if (isAdminCommand && !isAnyAdmin) {
             socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Anda bukan bagian dari Tim Admin.` });
@@ -208,6 +208,20 @@ io.on('connection', (socket) => {
             }
 
             if (targetSocketId) {
+                // --- SISTEM ANTI-KUDETA ---
+                // 1. Tidak ada yang boleh menendang Admin Utama
+                if (targetSocketId === mainAdminId) {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Anda tidak bisa menendang Admin Utama.` });
+                    return;
+                }
+                
+                // 2. Sesama Co-Host tidak boleh saling menendang (Opsional, tapi sangat disarankan)
+                if (isCoHost && coHostIds.includes(targetSocketId)) {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Sesama Co-Host tidak diperbolehkan saling menendang.` });
+                    return;
+                }
+               
+            if (targetSocketId) {
                 // 1. Kirim "Surat Kiamat" ke komputer target
                 io.to(targetSocketId).emit('kickedOut');
                 
@@ -221,6 +235,8 @@ io.on('connection', (socket) => {
                 // Laporan jika nama salah/typo
                 socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
             }
+
+          
             return; // Hentikan fungsi di sini, jangan bocorkan teks /kick ini ke chat publik!
         }
 
@@ -440,6 +456,42 @@ io.on('connection', (socket) => {
                     io.to(targetSocketId).emit('receiveMessage', { name: "🤖 System", text: `👑 Anda telah diangkat menjadi Co-Host (Admin Pembantu) oleh Admin Utama!` });
                     socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil mengangkat ${players[targetSocketId].playerName} sebagai Co-Host.` });
                     io.emit('receiveMessage', { name: "🤖 System", text: `👥 PENGUMUMAN: ${players[targetSocketId].playerName} sekarang resmi menjadi Co-Host ruangan!` });
+                }
+            } else {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
+            }
+            return;
+        }
+
+      // ==========================================
+        // LEPAS JABATAN CO-HOST (HANYA OLEH ADMIN UTAMA)
+        // ==========================================
+        if (text.startsWith('/lepascohost ')) {
+            // Cek perlindungan: Hanya Admin Utama yang boleh memecat
+            if (!isMainAdmin) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Hanya Admin Utama yang bisa mencabut jabatan Co-Host.` });
+                return;
+            }
+
+            const targetName = text.replace('/lepascohost ', '').trim().toLowerCase();
+            let targetSocketId = null;
+
+            for (let id in players) {
+                if (players[id].playerName.toLowerCase() === targetName) {
+                    targetSocketId = id;
+                    break;
+                }
+            }
+
+            if (targetSocketId) {
+                if (coHostIds.includes(targetSocketId)) {
+                    // Hapus target dari daftar Co-Host
+                    coHostIds = coHostIds.filter(id => id !== targetSocketId);
+                    
+                    io.to(targetSocketId).emit('receiveMessage', { name: "🤖 System", text: `⚠️ Jabatan Co-Host Anda telah dicabut oleh Admin Utama.` });
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil mencabut jabatan Co-Host dari ${players[targetSocketId].playerName}.` });
+                } else {
+                    socket.emit('receiveMessage', { name: "🤖 System", text: `⚠️ ${players[targetSocketId].playerName} memang bukan seorang Co-Host.` });
                 }
             } else {
                 socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Pemain bernama "${targetName}" tidak ditemukan.` });
