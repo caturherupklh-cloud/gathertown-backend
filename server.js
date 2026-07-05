@@ -4,6 +4,9 @@ const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 const VIP_PASSWORD = process.env.ROOM_PASSWORD;
 
+// 👇 TAMBAHKAN BARIS INI KEMBALI
+const ROOM_NAME = "MandatBumi_Global"; 
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
