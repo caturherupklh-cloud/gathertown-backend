@@ -56,9 +56,11 @@ io.on('connection', (socket) => {
             const tokenLiveKit = await at.toJwt();
 
             // B. Simpan Data Pemain
+            const randomSpawnX = Math.floor(Math.random() * (1344 - 1056 + 1)) + 1056;
+            const randomSpawnY = Math.floor(Math.random() * (352 - 160 + 1)) + 160;
             players[targetSocketId] = {
-                x: 1200, 
-                y: 245,
+                x: randomSpawnX, 
+                y: randomSpawnY,
                 id: targetSocketId,
                 direction: 'down',
                 isMoving: false,
