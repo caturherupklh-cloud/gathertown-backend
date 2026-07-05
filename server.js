@@ -29,6 +29,39 @@ io.on('connection', (socket) => {
     console.log('Koneksi baru masuk (belum login):', socket.id);
 
     socket.on('joinGame', (data) => {
+        // ==========================================
+        // FITUR BARU: SATPAM PENCEGAH NAMA KEMBAR
+        // ==========================================
+        const requestedName = data.name.trim().toLowerCase();
+        let isNameTaken = false;
+
+        // 1. Cek apakah nama sudah dipakai oleh pemain di dalam ruangan
+        for (let id in players) {
+            if (players[id].playerName.toLowerCase() === requestedName) {
+                isNameTaken = true;
+                break;
+            }
+        }
+
+        // 2. Cek juga apakah nama tersebut sedang antre di Ruang Tunggu (Gatekeeper)
+        if (!isNameTaken) {
+            for (let id in pendingUsers) {
+                if (pendingUsers[id].name.toLowerCase() === requestedName) {
+                    isNameTaken = true;
+                    break;
+                }
+            }
+        }
+
+        // Jika ketahuan kembar, tolak mentah-mentah dan hentikan proses!
+        if (isNameTaken) {
+            // Menggunakan event loginFailed yang sudah kita buat sebelumnya di client
+            socket.emit('loginFailed', `❌ Nama "${data.name}" sudah digunakan oleh orang lain. Silakan pilih nama lain!`);
+            return; 
+        }
+        // ==========================================
+
+
         // 1. Cek apakah pintu sedang dikunci oleh Admin
         if (currentAdminId && currentAdminId !== socket.id) {
             pendingUsers[socket.id] = data; 
@@ -67,7 +100,9 @@ io.on('connection', (socket) => {
                 isBroadcasting: false,
                 avatar: data.avatar,
                 playerName: data.name,
-                inCall: false, callTarget: null
+                inCall: false, callTarget: null,
+                vx: 0, 
+                vy: 0
             };
 
             // C. Kirim Sukses beserta Tiket LiveKit!
@@ -102,29 +137,32 @@ io.on('connection', (socket) => {
         delete pendingUsers[res.targetId]; 
     });
   
-  socket.on('playerMovement', (movementData) => {
-        if (players[socket.id]) {
-            players[socket.id].x = movementData.x;
-            players[socket.id].y = movementData.y;
-            players[socket.id].direction = movementData.direction; 
-            players[socket.id].isMoving = movementData.isMoving;
-            players[socket.id].isBroadcasting = movementData.isBroadcasting;
-            players[socket.id].vx = movementData.vx;
-            players[socket.id].vy = movementData.vy;
+  socket.on('playerMovement', (pack) => {
+        // Pastikan data yang masuk adalah Array hasil packing kita
+        if (players[socket.id] && Array.isArray(pack)) {
+            // Peta penerjemah 1 huruf kembali ke kata aslinya untuk memori server
+            const dirMap = { 'u': 'up', 'd': 'down', 'l': 'left', 'r': 'right' };
+            
+            // Kupas data Array ke dalam variabel memori server
+            players[socket.id].x = pack[0];
+            players[socket.id].y = pack[1];
+            players[socket.id].direction = dirMap[pack[2]]; 
+            players[socket.id].isMoving = pack[3] === 1;
+            players[socket.id].isBroadcasting = pack[4] === 1;
+            players[socket.id].vx = pack[5];
+            players[socket.id].vy = pack[6];
 
             // --- SISTEM AREA OF INTEREST (AOI) ---
-            // Layar berukuran 800x640. Kita gunakan jarak 1000x800 sebagai batas pandang.
             for (let targetId in players) {
                 if (targetId !== socket.id) {
                     let targetPlayer = players[targetId];
                     let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
                     let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
 
-                    // --- SISTEM AREA OF INTEREST (AOI) - ULTRA HEMAT ---
-                    // Jarak layar asli ke tepi: X = 400, Y = 320. 
-                    // Buffer agresif +50px dan +40px untuk efisiensi maksimal.
                     if (jarakX < 450 && jarakY < 360) {
-                        io.to(targetId).emit('playerMoved', players[socket.id]);
+                        // SUPER HEMAT: Selipkan 'socket.id' di urutan paling depan Array,
+                        // sehingga ukurannya menjadi: [id, x, y, dir, mov, brod, vx, vy]
+                        io.to(targetId).emit('playerMoved', [socket.id, ...pack]);
                     }
                 }
             }
