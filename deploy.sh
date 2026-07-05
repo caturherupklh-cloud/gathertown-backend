@@ -9,7 +9,7 @@ sudo apt-get install -y docker.io docker-compose git
 
 # 3. Kloning repositori GitHub kamu (Ganti URL dengan link repo-mu)
 # Pastikan repo bersifat publik agar tidak perlu password, atau gunakan Personal Access Token
-git clone https://github.com/caturherupklh-cloud/gathertown-backend
+git clone https://github.com/caturherupklh-cloud/gathertown-backend.git
 cd gathertown-backend
 
 # 4. Bangun dan nyalakan peladen di latar belakang
