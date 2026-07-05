@@ -88,21 +88,27 @@ io.on('connection', (socket) => {
     // UBAH JADI ASYNC: Fungsi pemroses pemain yang berhasil lolos
     async function prosesMasukLolos(targetSocketId, data) {
         try {
-            // A. Cetak Tiket LiveKit DULU
+            // Tentukan dimensi awal semua pemain baru
+            const targetRoom = "Lobby"; 
+            
+            // A. Cetak Tiket LiveKit DULU (Hanya untuk ruang Lobby)
             const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
               identity: targetSocketId,
               name: data.name,
             });
-            at.addGrant({ roomJoin: true, room: ROOM_NAME, canPublish: true, canSubscribe: true });
+            // Ganti ROOM_NAME menjadi targetRoom yang dinamis
+            at.addGrant({ roomJoin: true, room: targetRoom, canPublish: true, canSubscribe: true });
             const tokenLiveKit = await at.toJwt();
 
             // B. Simpan Data Pemain
             const randomSpawnX = Math.floor(Math.random() * (1344 - 1056 + 1)) + 1056;
             const randomSpawnY = Math.floor(Math.random() * (352 - 160 + 1)) + 160;
+            
             players[targetSocketId] = {
+                id: targetSocketId,
+                room: targetRoom, // <--- JANGKAR DIMENSI KASTA 2
                 x: randomSpawnX, 
                 y: randomSpawnY,
-                id: targetSocketId,
                 direction: 'down',
                 isMoving: false,
                 isBroadcasting: false,
@@ -113,17 +119,36 @@ io.on('connection', (socket) => {
                 vy: 0
             };
 
-            // C. Kirim Sukses beserta Tiket LiveKit!
+            // C. Masukkan Soket Jaringan ke Ruang Isolasi
+            const targetSocket = io.sockets.sockets.get(targetSocketId);
+            if (targetSocket) {
+                targetSocket.join(targetRoom);
+            }
+
+            // D. Buat fungsi kecil untuk mengambil pemain khusus di Lobby saja
+            const playersInLobby = {};
+            for (let id in players) {
+                if (players[id].room === targetRoom) {
+                    playersInLobby[id] = players[id];
+                }
+            }
+
+            // E. Kirim Sukses beserta Tiket LiveKit!
             io.to(targetSocketId).emit('loginSuccess', { 
                 id: targetSocketId, 
-                players: players,
+                players: playersInLobby, // Hanya kirim data orang-orang di Lobby
                 livekitToken: tokenLiveKit
             });
             
-            io.emit('playerJoined', players[targetSocketId]);
-            io.emit('currentPlayers', players);
-            socket.broadcast.emit('newPlayer', players[targetSocketId]);
-            console.log(`Pemain ${targetSocketId} berhasil lolos. Tiket LiveKit diberikan.`);
+            // F. Umumkan HANYA ke ruangan targetRoom (Lobby)
+            io.to(targetRoom).emit('playerJoined', players[targetSocketId]);
+            io.to(targetRoom).emit('currentPlayers', playersInLobby);
+            
+            if (targetSocket) {
+                targetSocket.broadcast.to(targetRoom).emit('newPlayer', players[targetSocketId]);
+            }
+            
+            console.log(`Pemain ${targetSocketId} berhasil masuk ke ${targetRoom}.`);
         } catch (error) {
             console.error("Gagal mencetak tiket:", error);
             io.to(targetSocketId).emit('loginFailed', "❌ Error: Peladen gagal mencetak tiket video.");
@@ -144,12 +169,81 @@ io.on('connection', (socket) => {
         }
         delete pendingUsers[res.targetId]; 
     });
+
+    // ==========================================
+    // SISTEM PORTAL KASTA 2: PINDAH RUANGAN
+    // ==========================================
+    socket.on('mintaPindahRuangan', async (req) => {
+        const p = players[socket.id];
+        if (!p) return;
+
+        const { targetRoom, password } = req;
+        const oldRoom = p.room;
+
+        // Validasi Pintu VIP
+        if (targetRoom === 'VIP') {
+            if (password !== VIP_PASSWORD) {
+                socket.emit('pindahRuanganGagal', '❌ Akses Ditolak: Password VIP salah.');
+                return;
+            }
+        }
+
+        try {
+            // 1. Cetak Tiket Media Baru khusus untuk ruangan tujuan
+            const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+                identity: socket.id,
+                name: p.playerName,
+            });
+            at.addGrant({ roomJoin: true, room: targetRoom, canPublish: true, canSubscribe: true });
+            const newToken = await at.toJwt();
+
+            // 2. Cabut dari Dimensi Lama
+            socket.leave(oldRoom);
+            io.to(oldRoom).emit('playerDisconnected', socket.id);
+
+            // 3. Pindah Fisik ke Dimensi Baru
+            socket.join(targetRoom);
+            p.room = targetRoom;
+            
+            // 4. Letakkan di titik spawn Ruangan (Koordinat ini bisa Anda ubah nanti)
+            if (targetRoom === 'VIP') {
+                p.x = 288; p.y = 224; // Contoh koordinat di dalam VIP
+            } else {
+                p.x = 1200; p.y = 200; // Contoh koordinat kembali ke Lobby
+            }
+
+            // 5. Kumpulkan data pemain yang ada di ruang baru
+            const playersInNewRoom = {};
+            for (let id in players) {
+                if (players[id].room === targetRoom) {
+                    playersInNewRoom[id] = players[id];
+                }
+            }
+
+            // 6. Kirim Data Baru ke Pemohon
+            socket.emit('pindahRuanganSukses', {
+                room: targetRoom,
+                players: playersInNewRoom,
+                livekitToken: newToken,
+                newX: p.x,
+                newY: p.y
+            });
+
+            // 7. Umumkan Kehadiran kepada orang-orang di dimensi baru
+            socket.broadcast.to(targetRoom).emit('newPlayer', p);
+            console.log(`${p.playerName} berpindah ke ruang ${targetRoom}`);
+
+        } catch (error) {
+            console.error("Gagal memindahkan ruangan:", error);
+            socket.emit('pindahRuanganGagal', '❌ Error sistem saat menghubungi LiveKit.');
+        }
+    });
   
   socket.on('playerMovement', (pack) => {
         // Pastikan data yang masuk adalah Array hasil packing kita
         if (players[socket.id] && Array.isArray(pack)) {
-            // Peta penerjemah 1 huruf kembali ke kata aslinya untuk memori server
             const dirMap = { 'u': 'up', 'd': 'down', 'l': 'left', 'r': 'right' };
+            const myRoom = players[socket.id].room; // <--- Cek orang ini ada di ruang mana
             
             // Kupas data Array ke dalam variabel memori server
             players[socket.id].x = pack[0];
@@ -160,17 +254,19 @@ io.on('connection', (socket) => {
             players[socket.id].vx = pack[5];
             players[socket.id].vy = pack[6];
 
-            // --- SISTEM AREA OF INTEREST (AOI) ---
+            // --- SISTEM AREA OF INTEREST (AOI) TERISOLASI ---
             for (let targetId in players) {
                 if (targetId !== socket.id) {
                     let targetPlayer = players[targetId];
-                    let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
-                    let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
+                    
+                    // KUNCI KASTA 2: Hanya hitung jarak & kirim data jika di ruangan yang sama
+                    if (targetPlayer.room === myRoom) {
+                        let jarakX = Math.abs(players[socket.id].x - targetPlayer.x);
+                        let jarakY = Math.abs(players[socket.id].y - targetPlayer.y);
 
-                    if (players[socket.id].isBroadcasting || (jarakX < 450 && jarakY < 360)) {
-                        // SUPER HEMAT: Selipkan 'socket.id' di urutan paling depan Array,
-                        // sehingga ukurannya menjadi: [id, x, y, dir, mov, brod, vx, vy]
-                        io.to(targetId).emit('playerMoved', [socket.id, ...pack]);
+                        if (players[socket.id].isBroadcasting || (jarakX < 450 && jarakY < 360)) {
+                            io.to(targetId).emit('playerMoved', [socket.id, ...pack]);
+                        }
                     }
                 }
             }
@@ -526,19 +622,25 @@ if (text.startsWith('/kick ')) {
         }
       
         // ==========================================
-        // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA
+        // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA (TERISOLASI)
         // ==========================================
-        io.emit('receiveMessage', { 
-            name: senderName, 
-            text: text 
-        });
-    }
-  });
+        const myRoom = players[socket.id].room; // Cari tahu pengirim ada di mana
+
+        // Jangan kirim chat biasa jika teksnya adalah perintah sistem rahasia admin
+        if (!isAdminCommand && !text.startsWith('/bismillah') && text.trim() !== '/lepasadmin') {
+            io.to(myRoom).emit('receiveMessage', { 
+                name: senderName, 
+                text: text 
+            });
+        }
+    } // Penutup if(players[socket.id]) dari sendMessage
+  }); // Penutup socket.on('sendMessage')
 
   socket.on('sendEmote', (emoji) => {
-    // Pastikan pengirim terdaftar
     if (players[socket.id]) {
-        socket.broadcast.emit('receiveEmote', { 
+        const myRoom = players[socket.id].room;
+        // Kirim emote HANYA ke pemain di ruangan yang sama
+        socket.broadcast.to(myRoom).emit('receiveEmote', { 
             playerId: socket.id, 
             emoji: emoji 
         });
@@ -566,22 +668,35 @@ if (text.startsWith('/kick ')) {
     }
 
     if (players[socket.id]) {
+        const oldRoom = players[socket.id].room; // Catat ruang terakhirnya
         delete players[socket.id];
-        io.emit('playerDisconnected', socket.id);
+        // Umumkan putusnya koneksi HANYA ke ruangan tersebut
+        io.to(oldRoom).emit('playerDisconnected', socket.id);
     }
   });
 
 }); // <-- Kurung penutup utama yang sebelumnya hilang atau bergeser
 
 // ==========================================
-// SISTEM RADAR GLOBAL (HEARTBEAT)
+// SISTEM RADAR GLOBAL TERISOLASI (HEARTBEAT)
 // ==========================================
-// Mengirim update posisi semua orang setiap 3 detik 
-// agar fitur Minimap Admin tetap bekerja dan pemain yang jauh tidak "nyangkut"
 setInterval(() => {
-    if (Object.keys(players).length > 0) {
-        io.emit('globalSync', players);
-    }
+    // 1. Kumpulkan daftar ruangan yang sedang aktif (ada orangnya)
+    const activeRooms = [...new Set(Object.values(players).map(p => p.room))];
+    
+    // 2. Kirim sinkronisasi radar khusus per ruangan
+    activeRooms.forEach(room => {
+        const roomPlayers = {};
+        for (let id in players) {
+            if (players[id].room === room) {
+                roomPlayers[id] = players[id];
+            }
+        }
+        
+        if (Object.keys(roomPlayers).length > 0) {
+            io.to(room).emit('globalSync', roomPlayers);
+        }
+    });
 }, 3000);
 
 const PORT = process.env.PORT || 3000;
