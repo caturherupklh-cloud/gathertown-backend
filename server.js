@@ -1,3 +1,9 @@
+require('dotenv').config(); 
+
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
+const VIP_PASSWORD = process.env.ROOM_PASSWORD;
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -15,11 +21,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
-
-// KUNCI RAHASIA LIVEKIT (Hanya Server yang Tahu)
-const LIVEKIT_API_KEY = "APIDdNDQy6Txpnj";
-const LIVEKIT_API_SECRET = "HAyKkmCV3bXdwUu1fs1T08SfzSExm8CPCFKazv18X6y";
-const ROOM_NAME = "MandatBumi_Global";
 
 const players = {}; 
 let mainAdminId = null; // Menyimpan ID Admin Utama
