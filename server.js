@@ -107,6 +107,8 @@ io.on('connection', (socket) => {
             players[socket.id].direction = movementData.direction; 
             players[socket.id].isMoving = movementData.isMoving;
             players[socket.id].isBroadcasting = movementData.isBroadcasting;
+            players[socket.id].vx = movementData.vx;
+            players[socket.id].vy = movementData.vy;
 
             // --- SISTEM AREA OF INTEREST (AOI) ---
             // Layar berukuran 800x640. Kita gunakan jarak 1000x800 sebagai batas pandang.
