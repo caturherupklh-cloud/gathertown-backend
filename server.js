@@ -46,6 +46,7 @@ let dynamicPasswords = {
 
 io.on('connection', (socket) => {
     console.log('Koneksi baru masuk (belum login):', socket.id);
+    rateLimits[socket.id] = { lastMove: 0, lastChat: 0 };
 
     socket.on('joinGame', (data) => {
         // ==========================================
@@ -275,6 +276,12 @@ io.on('connection', (socket) => {
     });
   
   socket.on('playerMovement', (pack) => {
+        // ANTI-SPAM GERAKAN: Cek jarak waktu dari paket sebelumnya
+        const now = Date.now();
+        if (rateLimits[socket.id] && now - rateLimits[socket.id].lastMove < 30) {
+            return; // 🛑 Tolak paket jika terlalu cepat (< 30ms)
+        }
+        if (rateLimits[socket.id]) rateLimits[socket.id].lastMove = now;
         // Pastikan data yang masuk adalah Array hasil packing kita
         if (players[socket.id] && Array.isArray(pack)) {
             const dirMap = { 'u': 'up', 'd': 'down', 'l': 'left', 'r': 'right' };
@@ -309,6 +316,12 @@ io.on('connection', (socket) => {
     });
 
   socket.on('sendMessage', (text) => {
+    const now = Date.now();
+        if (rateLimits[socket.id] && now - rateLimits[socket.id].lastChat < 1000) {
+            socket.emit('receiveMessage', { name: "🤖 System", text: "⚠️ Anti-Spam: Tunggu 1 detik sebelum mengirim pesan lagi!" });
+            return; // 🛑 Tolak pesan
+        }
+    if (rateLimits[socket.id]) rateLimits[socket.id].lastChat = now;
     if (players[socket.id]) {
         const senderName = players[socket.id].playerName;
        // ==========================================
@@ -717,6 +730,7 @@ if (text.startsWith('/kick ')) {
 
   socket.on('disconnect', () => {
     console.log('Pemain terputus:', socket.id);
+    if (rateLimits[socket.id]) delete rateLimits[socket.id];
     
     // Jika Admin Utama yang DC
     if (mainAdminId === socket.id) {
