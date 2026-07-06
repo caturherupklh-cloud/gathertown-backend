@@ -25,7 +25,8 @@ const io = new Server(server, {
   }
 });
 
-const players = {}; 
+const players = {};
+const rateLimits = {};
 let mainAdminId = null; // Menyimpan ID Admin Utama
 let coHostIds = [];     // Array untuk menampung banyak Co-Host (Admin Pembantu)
 let pendingUsers = {};
