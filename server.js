@@ -30,6 +30,20 @@ let mainAdminId = null; // Menyimpan ID Admin Utama
 let coHostIds = [];     // Array untuk menampung banyak Co-Host (Admin Pembantu)
 let pendingUsers = {};
 
+// ==========================================
+// MESIN PASSWORD DINAMIS KASTA 2
+// ==========================================
+// Fungsi pembuat 4 digit angka acak (0000 - 9999)
+const generatePIN = () => Math.floor(1000 + Math.random() * 9000).toString(); 
+
+// Brankas penyimpan password untuk 4 ruang meeting
+let dynamicPasswords = {
+    Meeting1: generatePIN(),
+    Meeting2: generatePIN(),
+    Meeting3: generatePIN(),
+    Meeting4: generatePIN()
+};
+
 io.on('connection', (socket) => {
     console.log('Koneksi baru masuk (belum login):', socket.id);
 
@@ -181,9 +195,12 @@ io.on('connection', (socket) => {
         const oldRoom = p.room;
 
         // Validasi Pintu VIP
-        if (targetRoom === 'VIP') {
-            if (password !== VIP_PASSWORD) {
-                socket.emit('pindahRuanganGagal', '❌ Akses Ditolak: Password VIP salah.');
+        if (targetRoom !== 'Lobby') {
+            // Cek apakah targetRoom ada di dalam brankas dynamicPasswords kita
+            const sandiAsli = dynamicPasswords[targetRoom];
+            
+            if (sandiAsli && password !== sandiAsli) {
+                socket.emit('pindahRuanganGagal', `❌ Akses Ditolak: PIN untuk ${targetRoom} salah.`);
                 return;
             }
         }
@@ -205,12 +222,30 @@ io.on('connection', (socket) => {
             socket.join(targetRoom);
             p.room = targetRoom;
             
-            // 4. Letakkan di titik spawn Ruangan (Koordinat ini bisa Anda ubah nanti)
-            if (targetRoom === 'VIP') {
-                p.x = 288; p.y = 224; // Contoh koordinat di dalam VIP
+            // 4. Letakkan di titik spawn secara ACAK (Mencegah avatar bertumpuk & nyangkut)
+            let minX, maxX, minY, maxY;
+
+            if (targetRoom === 'Meeting1') {
+                minX = 200; maxX = 350; // Batas Kiri dan Kanan area pendaratan Meeting 1
+                minY = 150; maxY = 250; // Batas Atas dan Bawah area pendaratan Meeting 1
+            } else if (targetRoom === 'Meeting2') {
+                minX = 700; maxX = 850; 
+                minY = 150; maxY = 250; 
+            } else if (targetRoom === 'Meeting3') {
+                minX = 1100; maxX = 1250; 
+                minY = 150; maxY = 250; 
+            } else if (targetRoom === 'Meeting4') {
+                minX = 1500; maxX = 1650; 
+                minY = 150; maxY = 250; 
             } else {
-                p.x = 1200; p.y = 200; // Contoh koordinat kembali ke Lobby
+                // Koordinat mendarat saat kembali ke Lobby
+                minX = 1056; maxX = 1344; 
+                minY = 160; maxY = 352; 
             }
+
+            // Terapkan rumus acak matematika berdasarkan area yang dipilih di atas
+            p.x = Math.floor(Math.random() * (maxX - minX + 1)) + minX;
+            p.y = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
 
             // 5. Kumpulkan data pemain yang ada di ruang baru
             const playersInNewRoom = {};
@@ -284,7 +319,7 @@ io.on('connection', (socket) => {
         const isAnyAdmin = isMainAdmin || isCoHost;
 
         // Daftar semua perintah rahasia admin
-        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' || text.trim() === '/minimap' || text.startsWith('/jadicohost ') || text.startsWith('/lepascohost ');
+        const isAdminCommand = text.startsWith('/kick ') || text.startsWith('/stopscreen ') || text.startsWith('/mute ') || text.startsWith('/camoff ') || text.startsWith('/askmic ') || text.startsWith('/askcam ') || text.startsWith('/call ') || text.trim() === '/endcall' ||text.trim() === '/showpass' || text.trim() === '/resetpass' || text.trim() === '/minimap' || text.startsWith('/jadicohost ') || text.startsWith('/lepascohost ');
 
         if (isAdminCommand && !isAnyAdmin) {
             socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Anda bukan bagian dari Tim Admin.` });
@@ -526,6 +561,39 @@ if (text.startsWith('/kick ')) {
                 // Jika password salah
                 socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Akses Ditolak! Password Admin salah.` });
             }
+            return;
+        }
+
+      // ==========================================
+        // KODE RAHASIA ADMIN: LIHAT PASSWORD RUANGAN
+        // ==========================================
+        if (text.trim() === '/showpass') {
+            if (!isMainAdmin) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Hanya Admin Utama yang boleh melihat kunci.` });
+                return;
+            }
+            
+            let msg = "🔑 <b>PIN Ruang Meeting Saat Ini:</b><br>";
+            for (let ruang in dynamicPasswords) {
+                msg += `> ${ruang} : <b>${dynamicPasswords[ruang]}</b><br>`;
+            }
+            socket.emit('receiveMessage', { name: "🤖 System", text: msg });
+            return;
+        }
+
+        // ==========================================
+        // KODE RAHASIA ADMIN: ACAK ULANG (RESET) PASSWORD
+        // ==========================================
+        if (text.trim() === '/resetpass') {
+            if (!isMainAdmin) {
+                socket.emit('receiveMessage', { name: "🤖 System", text: `❌ Ditolak! Hanya Admin Utama yang boleh mereset kunci.` });
+                return;
+            }
+            
+            for (let ruang in dynamicPasswords) {
+                dynamicPasswords[ruang] = generatePIN(); // Acak ulang
+            }
+            socket.emit('receiveMessage', { name: "🤖 System", text: `✅ Berhasil! Semua PIN Ruang Meeting telah diacak ulang. Ketik /showpass untuk melihat PIN baru.` });
             return;
         }
 
