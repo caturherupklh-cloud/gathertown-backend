@@ -226,17 +226,17 @@ io.on('connection', (socket) => {
             let minX, maxX, minY, maxY;
 
             if (targetRoom === 'Meeting1') {
-                minX = 200; maxX = 350; // Batas Kiri dan Kanan area pendaratan Meeting 1
-                minY = 150; maxY = 250; // Batas Atas dan Bawah area pendaratan Meeting 1
+                minX = 320; maxX = 480; 
+                minY = 448; maxY = 512; 
             } else if (targetRoom === 'Meeting2') {
-                minX = 700; maxX = 850; 
-                minY = 150; maxY = 250; 
+                minX = 320; maxX = 480; 
+                minY = 448; maxY = 512;  
             } else if (targetRoom === 'Meeting3') {
-                minX = 1100; maxX = 1250; 
-                minY = 150; maxY = 250; 
+                minX = 320; maxX = 480; 
+                minY = 448; maxY = 512;  
             } else if (targetRoom === 'Meeting4') {
-                minX = 1500; maxX = 1650; 
-                minY = 150; maxY = 250; 
+                minX = 320; maxX = 480; 
+                minY = 448; maxY = 512; 
             } else {
                 // Koordinat mendarat saat kembali ke Lobby
                 minX = 1056; maxX = 1344; 
