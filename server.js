@@ -316,7 +316,11 @@ io.on('connection', (socket) => {
         }
     });
 
-  socket.on('sendMessage', (text) => {
+ socket.on('sendMessage', (data) => {
+    // Ekstrak data baru, dengan fallback agar kode lama tetap aman
+    const text = typeof data === 'object' ? data.text : data;
+    const targetId = typeof data === 'object' ? data.targetId : 'all';
+
     const now = Date.now();
         if (rateLimits[socket.id] && now - rateLimits[socket.id].lastChat < 1000) {
             socket.emit('receiveMessage', { name: "🤖 System", text: "⚠️ Anti-Spam: Tunggu 1 detik sebelum mengirim pesan lagi!" });
@@ -704,19 +708,44 @@ if (text.startsWith('/kick ')) {
         }
       
         // ==========================================
-        // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA (TERISOLASI)
+        // JIKA BUKAN PERINTAH ADMIN, KIRIM SEBAGAI CHAT BIASA ATAU PRIVAT
         // ==========================================
         const myRoom = players[socket.id].room; // Cari tahu pengirim ada di mana
 
         // Jangan kirim chat biasa jika teksnya adalah perintah sistem rahasia admin
         if (!isAdminCommand && !text.startsWith('/bismillah') && text.trim() !== '/lepasadmin') {
-            io.to(myRoom).emit('receiveMessage', { 
-                name: senderName, 
-                text: text 
-            });
+            
+            // --- FITUR BARU: LOGIKA PRIVATE CHAT ---
+            if (targetId && targetId !== 'all') {
+                // Pastikan user tujuan belum keluar (disconnect)
+                if (players[targetId]) {
+                    const targetName = players[targetId].playerName; // Ambil nama teman
+                    const payloadPrivat = {
+                        name: senderName,
+                        text: text,
+                        isPrivate: true,
+                        toName: targetName
+                    };
+                    
+                    // 1. Kirim diam-diam hanya ke target
+                    io.to(targetId).emit('receiveMessage', payloadPrivat);
+                    
+                    // 2. Pantulkan kembali ke pengirim agar muncul di layar sendiri
+                    socket.emit('receiveMessage', payloadPrivat);
+                } else {
+                    // Jika teman sudah keburu keluar/refresh halaman
+                    socket.emit('receiveMessage', { name: "🤖 System", text: "⚠️ Pesan gagal dikirim, user tidak ditemukan." });
+                }
+            } else {
+                // --- CHAT NORMAL (PUBLIC KE SEMUA ORANG DI ROOM) ---
+                io.to(myRoom).emit('receiveMessage', { 
+                    name: senderName, 
+                    text: text 
+                });
+            }
         }
     } // Penutup if(players[socket.id]) dari sendMessage
-  }); // Penutup socket.on('sendMessage')
+}); // Penutup socket.on('sendMessage')
 
   socket.on('sendEmote', (emoji) => {
     if (players[socket.id]) {
