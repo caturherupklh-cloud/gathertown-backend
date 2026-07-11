@@ -82,6 +82,15 @@ io.on('connection', (socket) => {
         }
         // ==========================================
 
+      // ==========================================
+      // FITUR BARU: PEMBATAS KAPASITAS MAKSIMAL (25 USER)
+      // ==========================================
+      const MAKSIMAL_USER = 25;
+      if (Object.keys(players).length >= MAKSIMAL_USER) {
+      socket.emit('loginFailed', `❌ Ruangan penuh! Kapasitas maksimal (${MAKSIMAL_USER} user) telah tercapai.`);
+      return; // Hentikan proses login agar tidak masuk ke ruang tunggu atau lobby
+      }
+
 
         // 1. Cek apakah pintu sedang dikunci oleh Admin
         if (mainAdminId && socket.id !== mainAdminId && !coHostIds.includes(socket.id)) {
